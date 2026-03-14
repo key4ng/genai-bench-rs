@@ -20,7 +20,12 @@ git clone <repo-url>
 cd genai-bench-rs
 cargo build --release
 
-# Binary is at target/release/gbrs
+# Option 1: Use the binary directly
+./target/release/gbrs benchmark --help
+
+# Option 2: Install to PATH
+cargo install --path .
+gbrs benchmark --help
 ```
 
 ## Quick Start

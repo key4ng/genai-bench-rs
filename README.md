@@ -52,11 +52,10 @@ gbrs benchmark \
     --scenario D(100,100) \
     --scenario D(500,200) \
     --concurrency 1,10,50,100,512 \
-    --duration 5m \
-    --max-requests 500
+    --duration 5m
 ```
 
-Each scenario runs independently across all concurrency levels. Each level ends when either the duration or max-requests limit is reached (whichever comes first).
+Each scenario runs independently across all concurrency levels. Each level runs for the full duration.
 
 ### Benchmark OpenAI or other hosted APIs
 
@@ -102,7 +101,6 @@ Options:
     --scenario <SCENARIO>          Scenario spec, repeatable (e.g., D(100,100))
     --concurrency <CONCURRENCY>    Comma-separated concurrency levels
     --duration <DURATION>          Duration per concurrency level [default: 5m]
-    --max-requests <MAX_REQUESTS>  Max requests per concurrency level
     --no-ignore-eos                Disable ignore_eos for backends that don't support it
     --output-dir <OUTPUT_DIR>      Output directory [default: ./results/<model>_<datetime>]
 ```

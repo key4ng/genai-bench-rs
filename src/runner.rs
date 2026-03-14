@@ -17,7 +17,6 @@ const COOLDOWN_SECS: f64 = 5.0;
 
 pub struct RunConfig {
     pub duration: Duration,
-    pub max_requests: Option<u64>,
     pub concurrency: u32,
 }
 
@@ -41,13 +40,12 @@ pub async fn run_benchmark(
 
     let run_start = Instant::now();
     let duration = config.duration;
-    let max_requests = config.max_requests;
 
     // Progress bar
-    let pb = ProgressBar::new(max_requests.unwrap_or(duration.as_secs()));
+    let pb = ProgressBar::new(duration.as_secs());
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{msg} [{bar:40}] {pos}/{len} reqs [{eta} left]")
+            .template("{msg} [{bar:40}] {pos}/{len}s {prefix} reqs [{eta} left]")
             .unwrap()
             .progress_chars("##-"),
     );
@@ -77,11 +75,6 @@ pub async fn run_benchmark(
             }
             if run_start.elapsed() >= duration {
                 break;
-            }
-            if let Some(max) = max_requests {
-                if producer_completed.load(Ordering::Relaxed) >= max {
-                    break;
-                }
             }
 
             let permit = match producer_sem.clone().acquire_owned().await {
@@ -139,7 +132,8 @@ pub async fn run_benchmark(
     let mut all_results: Vec<RawRequestResult> = Vec::new();
     while let Some(result) = rx.recv().await {
         all_results.push(result);
-        pb.set_position(completed_counter.load(Ordering::Relaxed));
+        pb.set_position(run_start.elapsed().as_secs());
+        pb.set_prefix(format!("{}", completed_counter.load(Ordering::Relaxed)));
     }
 
     producer.await.ok();

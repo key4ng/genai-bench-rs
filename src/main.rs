@@ -102,7 +102,6 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
 
             let config = RunConfig {
                 duration: args.duration,
-                max_requests: args.max_requests,
                 concurrency,
             };
 

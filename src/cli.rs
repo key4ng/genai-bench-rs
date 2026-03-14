@@ -50,10 +50,6 @@ pub struct BenchmarkArgs {
     #[arg(long, default_value = "5m", value_parser = parse_duration)]
     pub duration: Duration,
 
-    /// Max completed requests per concurrency level
-    #[arg(long)]
-    pub max_requests: Option<u64>,
-
     /// Disable ignore_eos (for backends like OpenAI that don't support it)
     #[arg(long, default_value_t = false)]
     pub no_ignore_eos: bool,
@@ -117,11 +113,9 @@ impl BenchmarkArgs {
 
     pub fn validate(&self) -> Result<(), String> {
         if self.duration < Duration::from_secs(60) {
-            return Err(
-                "duration must be at least 1m (warmup/cooldown requires 10s, \
-                 and meaningful metrics need sufficient data)"
-                    .to_string(),
-            );
+            return Err("duration must be at least 1m \
+                 (warmup/cooldown filtering requires sufficient data)"
+                .to_string());
         }
         Ok(())
     }

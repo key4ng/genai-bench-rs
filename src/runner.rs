@@ -7,8 +7,7 @@ use tokio::sync::{mpsc, Semaphore};
 
 use crate::client::BenchmarkClient;
 use crate::metrics::{
-    aggregate_metrics, compute_request_metrics, AggregatedMetrics, RawRequestResult,
-    RequestMetrics,
+    aggregate_metrics, compute_request_metrics, AggregatedMetrics, RawRequestResult, RequestMetrics,
 };
 use crate::scenario::Scenario;
 use crate::tokenizer::PromptGenerator;
@@ -45,9 +44,7 @@ pub async fn run_benchmark(
     let max_requests = config.max_requests;
 
     // Progress bar
-    let pb = ProgressBar::new(
-        max_requests.unwrap_or(duration.as_secs()) as u64
-    );
+    let pb = ProgressBar::new(max_requests.unwrap_or(duration.as_secs()));
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{msg} [{bar:40}] {pos}/{len} reqs [{eta} left]")
@@ -96,7 +93,9 @@ pub async fn run_benchmark(
                     .generate_prompt(input_tokens)
                     .unwrap_or_else(|_| "Hello".to_string());
 
-                let result = client.send_request(request_id, &prompt, output_tokens).await;
+                let result = client
+                    .send_request(request_id, &prompt, output_tokens)
+                    .await;
 
                 if result.error.is_none() {
                     completed.fetch_add(1, Ordering::Relaxed);
@@ -125,7 +124,8 @@ pub async fn run_benchmark(
 
     // Separate successes and errors
     let mut successes: Vec<RequestMetrics> = Vec::new();
-    let mut error_breakdown: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut error_breakdown: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for raw in &all_results {
         if let Some(ref err) = raw.error {

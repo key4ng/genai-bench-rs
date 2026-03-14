@@ -13,7 +13,10 @@ pub struct DeterministicScenario {
 
 impl DeterministicScenario {
     pub fn new(input_tokens: usize, output_tokens: usize) -> Self {
-        Self { input_tokens, output_tokens }
+        Self {
+            input_tokens,
+            output_tokens,
+        }
     }
 }
 
@@ -40,7 +43,10 @@ pub fn parse_scenario(s: &str) -> Result<Box<dyn Scenario>> {
     let type_char = s.chars().next().unwrap();
     match type_char {
         'D' => parse_deterministic(s),
-        _ => Err(anyhow!("unknown scenario type '{}'. Supported: D(N,M)", type_char)),
+        _ => Err(anyhow!(
+            "unknown scenario type '{}'. Supported: D(N,M)",
+            type_char
+        )),
     }
 }
 
@@ -48,11 +54,19 @@ fn parse_deterministic(s: &str) -> Result<Box<dyn Scenario>> {
     let inner = s
         .strip_prefix("D(")
         .and_then(|s| s.strip_suffix(')'))
-        .ok_or_else(|| anyhow!("invalid deterministic scenario format: '{}'. Expected D(N,M)", s))?;
+        .ok_or_else(|| {
+            anyhow!(
+                "invalid deterministic scenario format: '{}'. Expected D(N,M)",
+                s
+            )
+        })?;
 
     let parts: Vec<&str> = inner.split(',').collect();
     if parts.len() != 2 {
-        return Err(anyhow!("D() requires exactly 2 arguments, got {}", parts.len()));
+        return Err(anyhow!(
+            "D() requires exactly 2 arguments, got {}",
+            parts.len()
+        ));
     }
 
     let input: usize = parts[0]

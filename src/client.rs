@@ -227,8 +227,7 @@ impl BenchmarkClient {
 
                     if let Some(ref content) = sse.content {
                         if first_token_time_ns.is_none() {
-                            first_token_time_ns =
-                                Some(absolute_start.elapsed().as_nanos() as u64);
+                            first_token_time_ns = Some(absolute_start.elapsed().as_nanos() as u64);
                         }
                         generated_text.push_str(content);
                     }

@@ -5,8 +5,8 @@ fn test_compute_request_metrics_normal() {
     let raw = RawRequestResult {
         request_id: 0,
         start_time_ns: 0,
-        first_token_time_ns: 150_000_000,  // 0.15s
-        end_time_ns: 1_650_000_000,        // 1.65s
+        first_token_time_ns: 150_000_000, // 0.15s
+        end_time_ns: 1_650_000_000,       // 1.65s
         num_input_tokens: 100,
         num_output_tokens: 100,
         reasoning_tokens: 0,
@@ -48,7 +48,7 @@ fn test_compute_request_metrics_sub_ms_output_latency() {
         request_id: 0,
         start_time_ns: 0,
         first_token_time_ns: 150_000_000,
-        end_time_ns: 150_500_000,          // output_latency = 0.0005s
+        end_time_ns: 150_500_000, // output_latency = 0.0005s
         num_input_tokens: 100,
         num_output_tokens: 10,
         reasoning_tokens: 0,
@@ -71,7 +71,10 @@ fn test_compute_request_metrics_error() {
         num_input_tokens: 0,
         num_output_tokens: 0,
         reasoning_tokens: 0,
-        error: Some(RequestError { code: 429, message: "Rate limited".into() }),
+        error: Some(RequestError {
+            code: 429,
+            message: "Rate limited".into(),
+        }),
     };
 
     let result = compute_request_metrics(&raw);
@@ -82,16 +85,26 @@ fn test_compute_request_metrics_error() {
 fn test_aggregate_metrics_basic() {
     let metrics = vec![
         RequestMetrics {
-            request_id: 0, ttft_s: 0.10, e2e_latency_s: 1.5,
-            tpot_s: Some(0.015), output_throughput_tps: Some(66.7),
+            request_id: 0,
+            ttft_s: 0.10,
+            e2e_latency_s: 1.5,
+            tpot_s: Some(0.015),
+            output_throughput_tps: Some(66.7),
             input_throughput_tps: Some(666.7),
-            num_input_tokens: 100, num_output_tokens: 100, reasoning_tokens: 0,
+            num_input_tokens: 100,
+            num_output_tokens: 100,
+            reasoning_tokens: 0,
         },
         RequestMetrics {
-            request_id: 1, ttft_s: 0.20, e2e_latency_s: 2.0,
-            tpot_s: Some(0.020), output_throughput_tps: Some(50.0),
+            request_id: 1,
+            ttft_s: 0.20,
+            e2e_latency_s: 2.0,
+            tpot_s: Some(0.020),
+            output_throughput_tps: Some(50.0),
             input_throughput_tps: Some(500.0),
-            num_input_tokens: 100, num_output_tokens: 100, reasoning_tokens: 0,
+            num_input_tokens: 100,
+            num_output_tokens: 100,
+            reasoning_tokens: 0,
         },
     ];
 

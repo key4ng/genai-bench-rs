@@ -17,7 +17,9 @@ use clap::Parser;
 
 use cli::{Cli, Commands};
 use client::BenchmarkClient;
-use output::{print_error_summary, print_summary_table, write_detailed_stats_csv, write_summary_csv};
+use output::{
+    print_error_summary, print_summary_table, write_detailed_stats_csv, write_summary_csv,
+};
 use plot::{generate_plots, PlotConfig, PlotType};
 use runner::{run_benchmark, RunConfig};
 use scenario::parse_scenario;

@@ -85,14 +85,17 @@ pub fn parse_duration(s: &str) -> Result<Duration, String> {
         return Err("duration cannot be empty".to_string());
     }
 
-    let (num_str, unit) = if s.ends_with('s') {
-        (&s[..s.len() - 1], "s")
-    } else if s.ends_with('m') {
-        (&s[..s.len() - 1], "m")
-    } else if s.ends_with('h') {
-        (&s[..s.len() - 1], "h")
+    let (num_str, unit) = if let Some(n) = s.strip_suffix('s') {
+        (n, "s")
+    } else if let Some(n) = s.strip_suffix('m') {
+        (n, "m")
+    } else if let Some(n) = s.strip_suffix('h') {
+        (n, "h")
     } else {
-        return Err(format!("invalid duration '{}': must end with s, m, or h", s));
+        return Err(format!(
+            "invalid duration '{}': must end with s, m, or h",
+            s
+        ));
     };
 
     let num: u64 = num_str

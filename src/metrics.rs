@@ -72,9 +72,19 @@ pub struct AggregatedMetrics {
 impl AggregatedMetrics {
     pub fn empty() -> Self {
         let empty_dist = DistributionStats {
-            min: 0.0, p1: 0.0, p5: 0.0, p10: 0.0, p25: 0.0,
-            p50: 0.0, p75: 0.0, p90: 0.0, p95: 0.0, p99: 0.0,
-            max: 0.0, mean: 0.0, stddev: 0.0,
+            min: 0.0,
+            p1: 0.0,
+            p5: 0.0,
+            p10: 0.0,
+            p25: 0.0,
+            p50: 0.0,
+            p75: 0.0,
+            p90: 0.0,
+            p95: 0.0,
+            p99: 0.0,
+            max: 0.0,
+            mean: 0.0,
+            stddev: 0.0,
         };
         Self {
             concurrency: 0,
@@ -110,7 +120,8 @@ pub fn compute_request_metrics(raw: &RawRequestResult) -> Option<RequestMetrics>
         None
     };
 
-    let (tpot_s, output_throughput_tps) = if raw.num_output_tokens > 1 && output_latency_s >= 0.001 {
+    let (tpot_s, output_throughput_tps) = if raw.num_output_tokens > 1 && output_latency_s >= 0.001
+    {
         let tpot = output_latency_s / (raw.num_output_tokens as f64 - 1.0);
         (Some(tpot), Some(1.0 / tpot))
     } else {
@@ -170,8 +181,14 @@ pub fn aggregate_metrics(metrics: &[RequestMetrics], run_duration_s: f64) -> Agg
     let ttft_values: Vec<f64> = metrics.iter().map(|m| m.ttft_s).collect();
     let e2e_values: Vec<f64> = metrics.iter().map(|m| m.e2e_latency_s).collect();
     let tpot_values: Vec<f64> = metrics.iter().filter_map(|m| m.tpot_s).collect();
-    let ot_values: Vec<f64> = metrics.iter().filter_map(|m| m.output_throughput_tps).collect();
-    let it_values: Vec<f64> = metrics.iter().filter_map(|m| m.input_throughput_tps).collect();
+    let ot_values: Vec<f64> = metrics
+        .iter()
+        .filter_map(|m| m.output_throughput_tps)
+        .collect();
+    let it_values: Vec<f64> = metrics
+        .iter()
+        .filter_map(|m| m.input_throughput_tps)
+        .collect();
 
     let total_output_tokens: u64 = metrics.iter().map(|m| m.num_output_tokens as u64).sum();
 

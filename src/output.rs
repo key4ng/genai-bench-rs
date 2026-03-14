@@ -10,9 +10,12 @@ use crate::metrics::{AggregatedMetrics, RawRequestResult};
 pub fn summary_csv_headers() -> Vec<&'static str> {
     vec![
         "concurrency",
-        "ttft_mean", "ttft_p99",
-        "tpot_mean", "tpot_p99",
-        "e2e_latency_mean", "e2e_latency_p99",
+        "ttft_mean",
+        "ttft_p99",
+        "tpot_mean",
+        "tpot_p99",
+        "e2e_latency_mean",
+        "e2e_latency_p99",
         "output_throughput_mean",
         "output_throughput_server",
         "rps",
@@ -50,15 +53,24 @@ pub fn write_summary_csv(path: &Path, results: &[AggregatedMetrics]) -> anyhow::
     Ok(())
 }
 
-pub fn write_detailed_stats_csv(
-    path: &Path,
-    results: &[AggregatedMetrics],
-) -> anyhow::Result<()> {
+pub fn write_detailed_stats_csv(path: &Path, results: &[AggregatedMetrics]) -> anyhow::Result<()> {
     let mut wtr = csv::Writer::from_path(path)?;
     wtr.write_record([
-        "concurrency", "metric",
-        "min", "p1", "p5", "p10", "p25", "p50", "p75", "p90", "p95", "p99", "max",
-        "mean", "stddev",
+        "concurrency",
+        "metric",
+        "min",
+        "p1",
+        "p5",
+        "p10",
+        "p25",
+        "p50",
+        "p75",
+        "p90",
+        "p95",
+        "p99",
+        "max",
+        "mean",
+        "stddev",
     ])?;
 
     for agg in results {
@@ -122,8 +134,14 @@ pub fn write_raw_json(
 pub fn print_summary_table(results: &[AggregatedMetrics]) {
     let mut table = Table::new();
     table.set_header(vec![
-        "Concurrency", "TTFT p99", "TPOT p99", "E2E p99",
-        "OT/req", "OT/srv", "RPS", "Errors",
+        "Concurrency",
+        "TTFT p99",
+        "TPOT p99",
+        "E2E p99",
+        "OT/req",
+        "OT/srv",
+        "RPS",
+        "Errors",
     ]);
 
     for agg in results {
@@ -143,9 +161,7 @@ pub fn print_summary_table(results: &[AggregatedMetrics]) {
     println!("{table}");
 }
 
-pub fn print_error_summary(
-    error_data: &[(u32, HashMap<String, usize>)],
-) {
+pub fn print_error_summary(error_data: &[(u32, HashMap<String, usize>)]) {
     let has_errors = error_data.iter().any(|(_, m)| !m.is_empty());
     if !has_errors {
         return;

@@ -22,9 +22,19 @@ fn test_summary_csv_row() {
 
 fn make_test_aggregated_metrics() -> AggregatedMetrics {
     let dist = DistributionStats {
-        min: 0.1, p1: 0.1, p5: 0.11, p10: 0.12, p25: 0.13,
-        p50: 0.15, p75: 0.18, p90: 0.20, p95: 0.22, p99: 0.25,
-        max: 0.3, mean: 0.15, stddev: 0.03,
+        min: 0.1,
+        p1: 0.1,
+        p5: 0.11,
+        p10: 0.12,
+        p25: 0.13,
+        p50: 0.15,
+        p75: 0.18,
+        p90: 0.20,
+        p95: 0.22,
+        p99: 0.25,
+        max: 0.3,
+        mean: 0.15,
+        stddev: 0.03,
     };
     AggregatedMetrics {
         concurrency: 10,

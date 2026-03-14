@@ -41,7 +41,9 @@ impl PromptGenerator {
                     return Ok(prompt);
                 }
 
-                let encoding = self.tokenizer.encode(line.as_str(), false)
+                let encoding = self
+                    .tokenizer
+                    .encode(line.as_str(), false)
                     .map_err(|e| anyhow::anyhow!("Tokenization error: {}", e))?;
                 let line_tokens = encoding.get_ids().len();
 
@@ -54,7 +56,9 @@ impl PromptGenerator {
                 } else {
                     // Truncate at token boundary
                     let ids = &encoding.get_ids()[..remaining];
-                    let truncated = self.tokenizer.decode(ids, true)
+                    let truncated = self
+                        .tokenizer
+                        .decode(ids, true)
                         .map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
                     if !prompt.is_empty() {
                         prompt.push(' ');
@@ -70,7 +74,9 @@ impl PromptGenerator {
     }
 
     pub fn count_tokens(&self, text: &str) -> Result<usize> {
-        let encoding = self.tokenizer.encode(text, false)
+        let encoding = self
+            .tokenizer
+            .encode(text, false)
             .map_err(|e| anyhow::anyhow!("Tokenization error: {}", e))?;
         Ok(encoding.get_ids().len())
     }

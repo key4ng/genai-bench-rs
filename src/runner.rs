@@ -53,6 +53,9 @@ pub async fn run_benchmark(
     );
     pb.set_message(format!("Concurrency {}", config.concurrency));
 
+    let error_counter = Arc::new(AtomicU64::new(0));
+    const MAX_ERROR_LOGS: u64 = 3;
+
     // Spawn request producer
     let producer_client = client.clone();
     let producer_pg = prompt_generator.clone();
@@ -61,6 +64,7 @@ pub async fn run_benchmark(
     let producer_counter = request_counter.clone();
     let producer_completed = completed_counter.clone();
     let producer_cancelled = cancelled.clone();
+    let producer_errors = error_counter.clone();
     // For D(N,M) scenario.sample() always returns the same values,
     // but we call it per-request to support future distribution scenarios.
     let scenario_input = scenario.sample().0;
@@ -90,6 +94,7 @@ pub async fn run_benchmark(
             let pg = producer_pg.clone();
             let tx = producer_tx.clone();
             let completed = producer_completed.clone();
+            let errors = producer_errors.clone();
             let input_tokens = scenario_input;
             let output_tokens = scenario_output;
 
@@ -105,18 +110,20 @@ pub async fn run_benchmark(
                 if result.error.is_none() {
                     completed.fetch_add(1, Ordering::Relaxed);
                 } else if let Some(ref err) = result.error {
-                    // Real-time per-request error warning
-                    let msg = if err.code > 0 {
-                        format!(
-                            "[WARN] Request {}: HTTP {} {}",
-                            request_id,
-                            err.code,
-                            err.message.lines().next().unwrap_or("")
-                        )
-                    } else {
-                        format!("[WARN] Request {}: {}", request_id, err.message)
-                    };
-                    eprintln!("{}", msg);
+                    let count = errors.fetch_add(1, Ordering::Relaxed);
+                    if count < MAX_ERROR_LOGS {
+                        let msg = if err.code > 0 {
+                            format!(
+                                "[WARN] Request {}: HTTP {} {}",
+                                request_id,
+                                err.code,
+                                err.message.lines().next().unwrap_or("")
+                            )
+                        } else {
+                            format!("[WARN] Request {}: {}", request_id, err.message)
+                        };
+                        eprintln!("{}", msg);
+                    }
                 }
 
                 let _ = tx.send(result).await;
@@ -137,6 +144,15 @@ pub async fn run_benchmark(
 
     producer.await.ok();
     pb.finish_and_clear();
+
+    let total_errors_logged = error_counter.load(Ordering::Relaxed);
+    if total_errors_logged > MAX_ERROR_LOGS {
+        eprintln!(
+            "[WARN] ... and {} more errors ({} total)",
+            total_errors_logged - MAX_ERROR_LOGS,
+            total_errors_logged
+        );
+    }
 
     let total_elapsed_ns = run_start.elapsed().as_nanos() as u64;
 

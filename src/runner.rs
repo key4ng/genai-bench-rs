@@ -174,15 +174,23 @@ pub async fn run_benchmark(
         }
     }
 
-    // Filter warmup and cooldown based on request start_time relative to run start
+    // Filter warmup and cooldown based on request start_time relative to run start.
+    // Skip filtering if the run is too short (< warmup + cooldown + 1s of useful data).
     let warmup_ns = (WARMUP_SECS * 1_000_000_000.0) as u64;
-    let cooldown_threshold_ns =
-        total_elapsed_ns.saturating_sub((COOLDOWN_SECS * 1_000_000_000.0) as u64);
+    let cooldown_ns = (COOLDOWN_SECS * 1_000_000_000.0) as u64;
+    let min_run_for_filtering = warmup_ns + cooldown_ns + 1_000_000_000; // at least 1s of data
 
-    let filtered_with_times: Vec<(RequestMetrics, u64, u64)> = successes
-        .into_iter()
-        .filter(|(_, s_ns, _)| *s_ns >= warmup_ns && *s_ns <= cooldown_threshold_ns)
-        .collect();
+    let filtered_with_times: Vec<(RequestMetrics, u64, u64)> =
+        if total_elapsed_ns > min_run_for_filtering {
+            let cooldown_threshold_ns = total_elapsed_ns.saturating_sub(cooldown_ns);
+            successes
+                .into_iter()
+                .filter(|(_, s_ns, _)| *s_ns >= warmup_ns && *s_ns <= cooldown_threshold_ns)
+                .collect()
+        } else {
+            // Run too short for warmup/cooldown — include all requests
+            successes
+        };
 
     // Compute run_duration from the filtered window:
     // from first included request's start to last included request's end

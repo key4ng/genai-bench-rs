@@ -19,7 +19,7 @@ use cli::{Cli, Commands};
 use client::BenchmarkClient;
 use output::{
     print_error_summary, print_summary_table, write_detailed_stats_csv, write_raw_json,
-    write_summary_csv,
+    write_summary_csv, RawJsonEntry,
 };
 use plot::{generate_plots, PlotConfig, PlotType};
 use runner::{run_benchmark, RunConfig};
@@ -138,21 +138,20 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
             "scenario": scenario.name(),
             "duration": format!("{}s", args.duration.as_secs()),
         });
-        let raw_json_data: Vec<(u32, &[metrics::RawRequestResult], f64, f64, usize, usize)> =
-            all_raw_results
-                .iter()
-                .zip(all_aggregated.iter())
-                .map(|((conc, reqs), agg)| {
-                    (
-                        *conc,
-                        reqs.as_slice(),
-                        agg.run_duration_s,
-                        agg.output_throughput_server_tps,
-                        agg.total_requests,
-                        agg.error_count,
-                    )
-                })
-                .collect();
+        let raw_json_data: Vec<RawJsonEntry<'_>> = all_raw_results
+            .iter()
+            .zip(all_aggregated.iter())
+            .map(|((conc, reqs), agg)| {
+                (
+                    *conc,
+                    reqs.as_slice(),
+                    agg.run_duration_s,
+                    agg.output_throughput_server_tps,
+                    agg.total_requests,
+                    agg.error_count,
+                )
+            })
+            .collect();
         write_raw_json(
             &scenario_dir.join("raw_results.json"),
             &metadata,

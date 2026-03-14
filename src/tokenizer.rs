@@ -64,20 +64,11 @@ impl PromptGenerator {
                         prompt.push(' ');
                     }
                     prompt.push_str(&truncated);
-                    remaining = 0;
                     return Ok(prompt);
                 }
             }
             // Reshuffle if we need more tokens
             shuffled.shuffle(&mut rng);
         }
-    }
-
-    pub fn count_tokens(&self, text: &str) -> Result<usize> {
-        let encoding = self
-            .tokenizer
-            .encode(text, false)
-            .map_err(|e| anyhow::anyhow!("Tokenization error: {}", e))?;
-        Ok(encoding.get_ids().len())
     }
 }

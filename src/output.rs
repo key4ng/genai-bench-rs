@@ -7,6 +7,9 @@ use comfy_table::{Cell, Table};
 
 use crate::metrics::{AggregatedMetrics, RawRequestResult};
 
+/// (concurrency, requests, run_duration_s, output_throughput_server_tps, total_requests, error_count)
+pub type RawJsonEntry<'a> = (u32, &'a [RawRequestResult], f64, f64, usize, usize);
+
 pub fn summary_csv_headers() -> Vec<&'static str> {
     vec![
         "concurrency",
@@ -110,7 +113,7 @@ pub fn write_detailed_stats_csv(path: &Path, results: &[AggregatedMetrics]) -> a
 pub fn write_raw_json(
     path: &Path,
     metadata: &serde_json::Value,
-    results: &[(u32, &[RawRequestResult], f64, f64, usize, usize)],
+    results: &[RawJsonEntry<'_>],
 ) -> anyhow::Result<()> {
     use crate::metrics::compute_request_metrics;
 

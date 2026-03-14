@@ -47,7 +47,7 @@ pub async fn run_benchmark(
         ProgressStyle::default_bar()
             .template("{msg} [{bar:40}] {pos}/{len}s {prefix} reqs [{eta} left]")
             .unwrap()
-            .progress_chars("##-"),
+            .progress_chars("█░"),
     );
     pb.set_message(format!("Concurrency {}", config.concurrency));
 

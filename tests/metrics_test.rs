@@ -4,13 +4,12 @@ use genai_bench_rs::metrics::*;
 fn test_compute_request_metrics_normal() {
     let raw = RawRequestResult {
         request_id: 0,
-        start_time_ns: 0,
-        first_token_time_ns: 150_000_000, // 0.15s
-        end_time_ns: 1_650_000_000,       // 1.65s
+        start_ns: 0,
+        first_token_ns: 150_000_000, // 0.15s
+        end_ns: 1_650_000_000,       // 1.65s
         num_input_tokens: 100,
         num_output_tokens: 100,
         reasoning_tokens: 0,
-        run_offset_ns: 0,
         generated_text: String::new(),
         error: None,
     };
@@ -30,13 +29,12 @@ fn test_compute_request_metrics_normal() {
 fn test_compute_request_metrics_single_output_token() {
     let raw = RawRequestResult {
         request_id: 0,
-        start_time_ns: 0,
-        first_token_time_ns: 150_000_000,
-        end_time_ns: 300_000_000,
+        start_ns: 0,
+        first_token_ns: 150_000_000,
+        end_ns: 300_000_000,
         num_input_tokens: 100,
         num_output_tokens: 1,
         reasoning_tokens: 0,
-        run_offset_ns: 0,
         generated_text: String::new(),
         error: None,
     };
@@ -50,13 +48,12 @@ fn test_compute_request_metrics_single_output_token() {
 fn test_compute_request_metrics_sub_ms_output_latency() {
     let raw = RawRequestResult {
         request_id: 0,
-        start_time_ns: 0,
-        first_token_time_ns: 150_000_000,
-        end_time_ns: 150_500_000, // output_latency = 0.0005s
+        start_ns: 0,
+        first_token_ns: 150_000_000,
+        end_ns: 150_500_000, // output_latency = 0.0005s
         num_input_tokens: 100,
         num_output_tokens: 10,
         reasoning_tokens: 0,
-        run_offset_ns: 0,
         generated_text: String::new(),
         error: None,
     };
@@ -71,13 +68,12 @@ fn test_compute_request_metrics_sub_ms_output_latency() {
 fn test_compute_request_metrics_error() {
     let raw = RawRequestResult {
         request_id: 0,
-        start_time_ns: 0,
-        first_token_time_ns: 0,
-        end_time_ns: 0,
+        start_ns: 0,
+        first_token_ns: 0,
+        end_ns: 0,
         num_input_tokens: 0,
         num_output_tokens: 0,
         reasoning_tokens: 0,
-        run_offset_ns: 0,
         generated_text: String::new(),
         error: Some(RequestError {
             code: 429,

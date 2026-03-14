@@ -3,14 +3,12 @@ use serde::Serialize;
 #[derive(Debug, Clone)]
 pub struct RawRequestResult {
     pub request_id: u64,
-    /// Nanoseconds from request start to request start (always 0, baseline)
-    pub start_time_ns: u64,
-    /// Nanoseconds from request start to first content token
-    pub first_token_time_ns: u64,
-    /// Nanoseconds from request start to stream end
-    pub end_time_ns: u64,
-    /// Nanoseconds from benchmark run start to this request's start (for warmup/cooldown)
-    pub run_offset_ns: u64,
+    /// Nanoseconds from run start to request initiation
+    pub start_ns: u64,
+    /// Nanoseconds from run start to first content token
+    pub first_token_ns: u64,
+    /// Nanoseconds from run start to stream completion
+    pub end_ns: u64,
     pub num_input_tokens: u32,
     pub num_output_tokens: u32,
     pub reasoning_tokens: u32,
@@ -117,8 +115,8 @@ pub fn compute_request_metrics(raw: &RawRequestResult) -> Option<RequestMetrics>
         return None;
     }
 
-    let ttft_s = (raw.first_token_time_ns - raw.start_time_ns) as f64 / 1_000_000_000.0;
-    let e2e_latency_s = (raw.end_time_ns - raw.start_time_ns) as f64 / 1_000_000_000.0;
+    let ttft_s = (raw.first_token_ns - raw.start_ns) as f64 / 1_000_000_000.0;
+    let e2e_latency_s = (raw.end_ns - raw.start_ns) as f64 / 1_000_000_000.0;
     let output_latency_s = e2e_latency_s - ttft_s;
 
     let input_throughput_tps = if ttft_s > 0.0 {

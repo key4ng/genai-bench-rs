@@ -119,15 +119,13 @@ impl BenchmarkClient {
             payload["ignore_eos"] = serde_json::json!(true);
         }
 
-        let run_offset_ns = run_start.elapsed().as_nanos() as u64;
-        let start = Instant::now();
+        let start_ns = run_start.elapsed().as_nanos() as u64;
 
         let error_result = |error: RequestError| RawRequestResult {
             request_id,
-            start_time_ns: 0,
-            first_token_time_ns: 0,
-            end_time_ns: 0,
-            run_offset_ns,
+            start_ns,
+            first_token_ns: 0,
+            end_ns: 0,
             num_input_tokens: 0,
             num_output_tokens: 0,
             reasoning_tokens: 0,
@@ -165,7 +163,7 @@ impl BenchmarkClient {
             });
         }
 
-        let mut first_token_time_ns: Option<u64> = None;
+        let mut first_token_ns: Option<u64> = None;
         let mut generated_text = String::new();
         let mut usage: Option<Usage> = None;
 
@@ -194,7 +192,7 @@ impl BenchmarkClient {
 
                 if let Some(sse) = parse_sse_chunk(&line) {
                     if sse.done {
-                        let end_ns = start.elapsed().as_nanos() as u64;
+                        let end_ns = run_start.elapsed().as_nanos() as u64;
                         let u = usage.unwrap_or(Usage {
                             prompt_tokens: 0,
                             completion_tokens: 0,
@@ -207,10 +205,9 @@ impl BenchmarkClient {
                             .unwrap_or(0);
                         return RawRequestResult {
                             request_id,
-                            start_time_ns: 0,
-                            first_token_time_ns: first_token_time_ns.unwrap_or(0),
-                            end_time_ns: end_ns,
-                            run_offset_ns,
+                            start_ns,
+                            first_token_ns: first_token_ns.unwrap_or(start_ns),
+                            end_ns,
                             num_input_tokens: u.prompt_tokens,
                             num_output_tokens: u.completion_tokens,
                             reasoning_tokens: reasoning,
@@ -220,9 +217,9 @@ impl BenchmarkClient {
                     }
 
                     if let Some(ref content) = sse.content {
-                        if first_token_time_ns.is_none() {
+                        if first_token_ns.is_none() {
                             // Capture BEFORE processing content
-                            first_token_time_ns = Some(start.elapsed().as_nanos() as u64);
+                            first_token_ns = Some(run_start.elapsed().as_nanos() as u64);
                         }
                         generated_text.push_str(content);
                     }
@@ -235,7 +232,7 @@ impl BenchmarkClient {
         }
 
         // Stream ended without [DONE]
-        let end_ns = start.elapsed().as_nanos() as u64;
+        let end_ns = run_start.elapsed().as_nanos() as u64;
         let u = usage.unwrap_or(Usage {
             prompt_tokens: 0,
             completion_tokens: 0,
@@ -248,10 +245,9 @@ impl BenchmarkClient {
             .unwrap_or(0);
         RawRequestResult {
             request_id,
-            start_time_ns: 0,
-            first_token_time_ns: first_token_time_ns.unwrap_or(0),
-            end_time_ns: end_ns,
-            run_offset_ns,
+            start_ns,
+            first_token_ns: first_token_ns.unwrap_or(start_ns),
+            end_ns,
             num_input_tokens: u.prompt_tokens,
             num_output_tokens: u.completion_tokens,
             reasoning_tokens: reasoning,

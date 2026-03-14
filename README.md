@@ -1,6 +1,6 @@
 # genai-bench-rs
 
-A lightweight Rust CLI for benchmarking LLM serving systems at high concurrency with accurate timing and industry-standard metrics.
+A Rust reimplementation of [genai-bench](https://github.com/sgl-project/genai-bench) for benchmarking LLM serving systems at high concurrency with accurate timing and industry-standard metrics.
 
 ## Why Rust?
 

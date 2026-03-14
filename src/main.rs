@@ -1,4 +1,5 @@
 mod cli;
+mod scenario;
 
 use clap::Parser;
 use cli::{Cli, Commands};

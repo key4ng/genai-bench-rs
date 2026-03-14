@@ -18,8 +18,8 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use client::BenchmarkClient;
 use output::{
-    print_error_summary, print_summary_table, write_detailed_stats_csv, write_raw_json,
-    write_summary_csv, RawJsonEntry,
+    print_error_summary, print_summary_table, reset_summary_table, write_detailed_stats_csv,
+    write_raw_json, write_summary_csv, RawJsonEntry,
 };
 use plot::{generate_plots, PlotConfig, PlotType};
 use runner::{run_benchmark, RunConfig};
@@ -87,6 +87,7 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
             scenario.name(),
             args.model
         );
+        reset_summary_table();
 
         let mut all_aggregated: Vec<metrics::AggregatedMetrics> = Vec::new();
         let mut all_errors: Vec<(u32, HashMap<String, usize>)> = Vec::new();

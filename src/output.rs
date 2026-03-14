@@ -164,6 +164,13 @@ pub fn write_raw_json(
     Ok(())
 }
 
+/// Track how many lines the previous summary table used, so we can overwrite it.
+static PREV_TABLE_LINES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn reset_summary_table() {
+    PREV_TABLE_LINES.store(0, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub fn print_summary_table(results: &[AggregatedMetrics]) {
     let mut table = Table::new();
     table.set_header(vec![
@@ -190,8 +197,22 @@ pub fn print_summary_table(results: &[AggregatedMetrics]) {
         ]);
     }
 
-    println!("\nCompleted runs:");
-    println!("{table}");
+    let output = format!("\nCompleted runs:\n{table}");
+    let line_count = output.lines().count();
+
+    // Move cursor up to overwrite previous table
+    let prev = PREV_TABLE_LINES.load(std::sync::atomic::Ordering::Relaxed);
+    if prev > 0 {
+        // Move up prev lines and clear each
+        eprint!("\x1b[{}A", prev);
+        for _ in 0..prev {
+            eprintln!("\x1b[2K");
+        }
+        eprint!("\x1b[{}A", prev);
+    }
+
+    PREV_TABLE_LINES.store(line_count, std::sync::atomic::Ordering::Relaxed);
+    eprintln!("{output}");
 }
 
 pub fn print_error_summary(error_data: &[(u32, HashMap<String, usize>)]) {

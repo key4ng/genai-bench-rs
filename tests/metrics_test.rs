@@ -10,7 +10,6 @@ fn test_compute_request_metrics_normal() {
         num_input_tokens: 100,
         num_output_tokens: 100,
         reasoning_tokens: 0,
-        generated_text: String::new(),
         error: None,
     };
 
@@ -35,7 +34,6 @@ fn test_compute_request_metrics_single_output_token() {
         num_input_tokens: 100,
         num_output_tokens: 1,
         reasoning_tokens: 0,
-        generated_text: String::new(),
         error: None,
     };
 
@@ -54,7 +52,6 @@ fn test_compute_request_metrics_sub_ms_output_latency() {
         num_input_tokens: 100,
         num_output_tokens: 10,
         reasoning_tokens: 0,
-        generated_text: String::new(),
         error: None,
     };
 
@@ -74,7 +71,6 @@ fn test_compute_request_metrics_error() {
         num_input_tokens: 0,
         num_output_tokens: 0,
         reasoning_tokens: 0,
-        generated_text: String::new(),
         error: Some(RequestError {
             code: 429,
             message: "Rate limited".into(),

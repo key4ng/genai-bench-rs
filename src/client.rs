@@ -129,7 +129,6 @@ impl BenchmarkClient {
             num_input_tokens: 0,
             num_output_tokens: 0,
             reasoning_tokens: 0,
-            generated_text: String::new(),
             error: Some(error),
         };
 
@@ -164,7 +163,6 @@ impl BenchmarkClient {
         }
 
         let mut first_token_ns: Option<u64> = None;
-        let mut generated_text = String::new();
         let mut usage: Option<Usage> = None;
 
         // Stream SSE response
@@ -211,17 +209,13 @@ impl BenchmarkClient {
                             num_input_tokens: u.prompt_tokens,
                             num_output_tokens: u.completion_tokens,
                             reasoning_tokens: reasoning,
-                            generated_text,
                             error: None,
                         };
                     }
 
-                    if let Some(ref content) = sse.content {
-                        if first_token_ns.is_none() {
-                            // Capture BEFORE processing content
-                            first_token_ns = Some(run_start.elapsed().as_nanos() as u64);
-                        }
-                        generated_text.push_str(content);
+                    if sse.content.is_some() && first_token_ns.is_none() {
+                        // Capture BEFORE processing content
+                        first_token_ns = Some(run_start.elapsed().as_nanos() as u64);
                     }
 
                     if let Some(u) = sse.usage {
@@ -251,7 +245,6 @@ impl BenchmarkClient {
             num_input_tokens: u.prompt_tokens,
             num_output_tokens: u.completion_tokens,
             reasoning_tokens: reasoning,
-            generated_text,
             error: None,
         }
     }

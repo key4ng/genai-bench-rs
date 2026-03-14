@@ -12,8 +12,6 @@ pub struct RawRequestResult {
     pub num_input_tokens: u32,
     pub num_output_tokens: u32,
     pub reasoning_tokens: u32,
-    /// Accumulated generated text for token cross-validation
-    pub generated_text: String,
     pub error: Option<RequestError>,
 }
 

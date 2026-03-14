@@ -91,9 +91,6 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
         let mut all_aggregated: Vec<metrics::AggregatedMetrics> = Vec::new();
         let mut all_errors: Vec<(u32, HashMap<String, usize>)> = Vec::new();
         let mut all_raw_results: Vec<(u32, Vec<metrics::RawRequestResult>)> = Vec::new();
-        let mut total_mismatch_count: usize = 0;
-        let mut total_request_count: usize = 0;
-
         for &concurrency in &args.concurrency {
             if cancelled.load(Ordering::Relaxed) {
                 break;
@@ -113,22 +110,6 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
                 cancelled.clone(),
             )
             .await;
-
-            // Token count cross-validation
-            for raw in &result.all_requests {
-                if raw.error.is_none() && !raw.generated_text.is_empty() {
-                    total_request_count += 1;
-                    if let Ok(local_count) = prompt_generator.count_tokens(&raw.generated_text) {
-                        let server_count = raw.num_output_tokens as usize;
-                        if server_count > 0 {
-                            let diff = (local_count as f64 - server_count as f64).abs();
-                            if diff / server_count as f64 > 0.1 {
-                                total_mismatch_count += 1;
-                            }
-                        }
-                    }
-                }
-            }
 
             all_aggregated.push(result.aggregated.clone());
             all_errors.push((concurrency, result.error_breakdown.clone()));
@@ -180,17 +161,6 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
 
         // Print error summary
         print_error_summary(&all_errors);
-
-        // Token mismatch warning (once at end, not per-request)
-        if total_mismatch_count > 0 {
-            eprintln!(
-                "[WARN] Token count mismatches: {}/{} requests ({:.1}%) had >10% discrepancy between \
-                 server and client token counts. Server counts used for all metrics.",
-                total_mismatch_count,
-                total_request_count,
-                total_mismatch_count as f64 / total_request_count as f64 * 100.0
-            );
-        }
 
         eprintln!("\nResults saved to {}", scenario_dir.display());
     }

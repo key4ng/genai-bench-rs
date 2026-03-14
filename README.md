@@ -34,14 +34,14 @@ gbrs benchmark --help
 
 ```bash
 gbrs benchmark \
-    --api-base http://localhost:8000/v1 \
-    --model meta-llama/Llama-3-8B \
-    --scenario D(100,100) \
-    --concurrency 1,10,50,100 \
+    --api-base http://localhost:8080/v1 \
+    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
+    --scenario "D(100,100)" \
+    --concurrency 64,128,256,512 \
     --duration 2m
 ```
 
-This runs 4 concurrency levels (1, 10, 50, 100 concurrent requests) for 2 minutes each, using prompts of ~100 input tokens and requesting 100 output tokens.
+This runs 4 concurrency levels (64, 128, 256, 512 concurrent requests) for 2 minutes each, using prompts of ~100 input tokens and requesting 100 output tokens.
 
 ### Benchmark with multiple scenarios
 

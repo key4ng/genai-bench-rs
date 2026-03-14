@@ -145,6 +145,10 @@ pub fn compute_request_metrics(raw: &RawRequestResult) -> Option<RequestMetrics>
 }
 
 pub fn compute_distribution(values: &[f64]) -> DistributionStats {
+    if values.is_empty() {
+        return DistributionStats::default();
+    }
+
     let mut sorted = values.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
 

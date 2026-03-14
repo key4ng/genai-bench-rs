@@ -115,6 +115,17 @@ impl BenchmarkArgs {
         self.tokenizer.as_deref().unwrap_or(&self.model)
     }
 
+    pub fn validate(&self) -> Result<(), String> {
+        if self.duration < Duration::from_secs(60) {
+            return Err(
+                "duration must be at least 1m (warmup/cooldown requires 10s, \
+                 and meaningful metrics need sufficient data)"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
     pub fn output_dir(&self) -> String {
         if let Some(ref dir) = self.output_dir {
             dir.clone()

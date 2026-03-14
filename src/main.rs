@@ -37,6 +37,9 @@ async fn main() -> Result<()> {
 }
 
 async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
+    args.validate()
+        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
+
     // Check fd limits
     #[cfg(unix)]
     {

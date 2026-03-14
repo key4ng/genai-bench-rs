@@ -1,0 +1,171 @@
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use indicatif::{ProgressBar, ProgressStyle};
+use tokio::sync::{mpsc, Semaphore};
+
+use crate::client::BenchmarkClient;
+use crate::metrics::{
+    aggregate_metrics, compute_request_metrics, AggregatedMetrics, RawRequestResult,
+    RequestMetrics,
+};
+use crate::scenario::Scenario;
+use crate::tokenizer::PromptGenerator;
+
+const WARMUP_SECS: f64 = 5.0;
+const COOLDOWN_SECS: f64 = 5.0;
+
+pub struct RunConfig {
+    pub duration: Duration,
+    pub max_requests: Option<u64>,
+    pub concurrency: u32,
+}
+
+pub struct RunResult {
+    pub aggregated: AggregatedMetrics,
+    pub all_requests: Vec<RawRequestResult>,
+    pub error_breakdown: std::collections::HashMap<String, usize>,
+}
+
+pub async fn run_benchmark(
+    client: Arc<BenchmarkClient>,
+    prompt_generator: Arc<PromptGenerator>,
+    scenario: &dyn Scenario,
+    config: &RunConfig,
+    cancelled: Arc<AtomicBool>,
+) -> RunResult {
+    let (tx, mut rx) = mpsc::channel::<RawRequestResult>(config.concurrency as usize * 2);
+    let semaphore = Arc::new(Semaphore::new(config.concurrency as usize));
+    let request_counter = Arc::new(AtomicU64::new(0));
+    let completed_counter = Arc::new(AtomicU64::new(0));
+
+    let start_time = Instant::now();
+    let duration = config.duration;
+    let max_requests = config.max_requests;
+
+    // Progress bar
+    let pb = ProgressBar::new(
+        max_requests.unwrap_or(duration.as_secs()) as u64
+    );
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg} [{bar:40}] {pos}/{len} reqs [{eta} left]")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    pb.set_message(format!("Concurrency {}", config.concurrency));
+
+    // Spawn request producer
+    let producer_client = client.clone();
+    let producer_pg = prompt_generator.clone();
+    let producer_sem = semaphore.clone();
+    let producer_tx = tx.clone();
+    let producer_counter = request_counter.clone();
+    let producer_completed = completed_counter.clone();
+    let producer_cancelled = cancelled.clone();
+    let (input_tokens, output_tokens) = scenario.sample();
+
+    let producer = tokio::spawn(async move {
+        loop {
+            if producer_cancelled.load(Ordering::Relaxed) {
+                break;
+            }
+            if start_time.elapsed() >= duration {
+                break;
+            }
+            if let Some(max) = max_requests {
+                if producer_completed.load(Ordering::Relaxed) >= max {
+                    break;
+                }
+            }
+
+            let permit = match producer_sem.clone().acquire_owned().await {
+                Ok(p) => p,
+                Err(_) => break,
+            };
+
+            let request_id = producer_counter.fetch_add(1, Ordering::Relaxed);
+            let client = producer_client.clone();
+            let pg = producer_pg.clone();
+            let tx = producer_tx.clone();
+            let completed = producer_completed.clone();
+
+            tokio::spawn(async move {
+                let prompt = pg
+                    .generate_prompt(input_tokens)
+                    .unwrap_or_else(|_| "Hello".to_string());
+
+                let result = client.send_request(request_id, &prompt, output_tokens).await;
+
+                if result.error.is_none() {
+                    completed.fetch_add(1, Ordering::Relaxed);
+                }
+
+                let _ = tx.send(result).await;
+                drop(permit);
+            });
+        }
+    });
+
+    // Drop the producer's tx clone so rx completes when producer is done
+    drop(tx);
+
+    // Collect results
+    let mut all_results: Vec<RawRequestResult> = Vec::new();
+    while let Some(result) = rx.recv().await {
+        all_results.push(result);
+        pb.set_position(completed_counter.load(Ordering::Relaxed));
+    }
+
+    producer.await.ok();
+    pb.finish_and_clear();
+
+    let total_elapsed = start_time.elapsed().as_secs_f64();
+
+    // Separate successes and errors
+    let mut successes: Vec<RequestMetrics> = Vec::new();
+    let mut error_breakdown: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for raw in &all_results {
+        if let Some(ref err) = raw.error {
+            let key = if err.code > 0 {
+                err.code.to_string()
+            } else {
+                "timeout".to_string()
+            };
+            *error_breakdown.entry(key).or_default() += 1;
+        } else if let Some(metrics) = compute_request_metrics(raw) {
+            successes.push(metrics);
+        }
+    }
+
+    // Filter warmup and cooldown
+    // Note: For proper filtering we'd need per-request start times relative to run start.
+    // Currently all requests are included. This will be refined when absolute start times
+    // are stored in RawRequestResult.
+    let filtered: Vec<RequestMetrics> = successes;
+
+    let run_duration = total_elapsed;
+    let error_count = error_breakdown.values().sum::<usize>();
+
+    let mut aggregated = if filtered.is_empty() {
+        AggregatedMetrics::empty()
+    } else {
+        aggregate_metrics(&filtered, run_duration)
+    };
+
+    aggregated.concurrency = config.concurrency;
+    aggregated.error_count = error_count;
+    aggregated.error_rate = if all_results.is_empty() {
+        0.0
+    } else {
+        error_count as f64 / all_results.len() as f64
+    };
+
+    RunResult {
+        aggregated,
+        all_requests: all_results,
+        error_breakdown,
+    }
+}

@@ -69,6 +69,32 @@ pub struct AggregatedMetrics {
     pub stats: AggregatedStats,
 }
 
+impl AggregatedMetrics {
+    pub fn empty() -> Self {
+        let empty_dist = DistributionStats {
+            min: 0.0, p1: 0.0, p5: 0.0, p10: 0.0, p25: 0.0,
+            p50: 0.0, p75: 0.0, p90: 0.0, p95: 0.0, p99: 0.0,
+            max: 0.0, mean: 0.0, stddev: 0.0,
+        };
+        Self {
+            concurrency: 0,
+            run_duration_s: 0.0,
+            output_throughput_server_tps: 0.0,
+            rps: 0.0,
+            total_requests: 0,
+            error_count: 0,
+            error_rate: 0.0,
+            stats: AggregatedStats {
+                ttft: empty_dist.clone(),
+                tpot: empty_dist.clone(),
+                e2e_latency: empty_dist.clone(),
+                input_throughput: empty_dist.clone(),
+                output_throughput: empty_dist,
+            },
+        }
+    }
+}
+
 pub fn compute_request_metrics(raw: &RawRequestResult) -> Option<RequestMetrics> {
     if raw.error.is_some() {
         return None;

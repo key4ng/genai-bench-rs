@@ -31,7 +31,7 @@ pub struct RequestMetrics {
     pub reasoning_tokens: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct DistributionStats {
     pub min: f64,
     pub p1: f64,

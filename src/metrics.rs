@@ -3,12 +3,19 @@ use serde::Serialize;
 #[derive(Debug, Clone)]
 pub struct RawRequestResult {
     pub request_id: u64,
+    /// Nanoseconds from request start to request start (always 0, baseline)
     pub start_time_ns: u64,
+    /// Nanoseconds from request start to first content token
     pub first_token_time_ns: u64,
+    /// Nanoseconds from request start to stream end
     pub end_time_ns: u64,
+    /// Nanoseconds from benchmark run start to this request's start (for warmup/cooldown)
+    pub run_offset_ns: u64,
     pub num_input_tokens: u32,
     pub num_output_tokens: u32,
     pub reasoning_tokens: u32,
+    /// Accumulated generated text for token cross-validation
+    pub generated_text: String,
     pub error: Option<RequestError>,
 }
 

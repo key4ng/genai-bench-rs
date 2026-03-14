@@ -112,16 +112,46 @@ pub fn write_raw_json(
     metadata: &serde_json::Value,
     results: &[(u32, &[RawRequestResult], f64, f64, usize, usize)],
 ) -> anyhow::Result<()> {
+    use crate::metrics::compute_request_metrics;
+
     let json = serde_json::json!({
         "version": "1.0",
         "metadata": metadata,
-        "results": results.iter().map(|(conc, _reqs, dur, ot_server, total, errors)| {
+        "results": results.iter().map(|(conc, reqs, dur, ot_server, total, errors)| {
+            let requests: Vec<serde_json::Value> = reqs.iter().map(|raw| {
+                if let Some(ref err) = raw.error {
+                    serde_json::json!({
+                        "request_id": raw.request_id,
+                        "error": { "code": err.code, "message": &err.message }
+                    })
+                } else if let Some(m) = compute_request_metrics(raw) {
+                    serde_json::json!({
+                        "request_id": raw.request_id,
+                        "num_input_tokens": m.num_input_tokens,
+                        "num_output_tokens": m.num_output_tokens,
+                        "reasoning_tokens": m.reasoning_tokens,
+                        "ttft_s": m.ttft_s,
+                        "tpot_s": m.tpot_s,
+                        "e2e_latency_s": m.e2e_latency_s,
+                        "input_throughput_tps": m.input_throughput_tps,
+                        "output_throughput_tps": m.output_throughput_tps,
+                        "error": null
+                    })
+                } else {
+                    serde_json::json!({
+                        "request_id": raw.request_id,
+                        "error": null
+                    })
+                }
+            }).collect();
+
             serde_json::json!({
                 "concurrency": conc,
                 "run_duration_s": dur,
                 "output_throughput_server_tps": ot_server,
                 "total_requests": total,
                 "error_count": errors,
+                "requests": requests,
             })
         }).collect::<Vec<_>>(),
     });

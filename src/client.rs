@@ -17,6 +17,14 @@ pub struct SseChunk {
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
+    #[serde(default)]
+    pub completion_tokens_details: Option<CompletionTokensDetails>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CompletionTokensDetails {
+    #[serde(default)]
+    pub reasoning_tokens: Option<u32>,
 }
 
 pub fn parse_sse_chunk(line: &str) -> Option<SseChunk> {
@@ -94,6 +102,7 @@ impl BenchmarkClient {
         request_id: u64,
         prompt: &str,
         max_tokens: usize,
+        run_start: Instant,
     ) -> RawRequestResult {
         let url = format!("{}/chat/completions", self.api_base);
 
@@ -110,7 +119,21 @@ impl BenchmarkClient {
             payload["ignore_eos"] = serde_json::json!(true);
         }
 
+        let run_offset_ns = run_start.elapsed().as_nanos() as u64;
         let start = Instant::now();
+
+        let error_result = |error: RequestError| RawRequestResult {
+            request_id,
+            start_time_ns: 0,
+            first_token_time_ns: 0,
+            end_time_ns: 0,
+            run_offset_ns,
+            num_input_tokens: 0,
+            num_output_tokens: 0,
+            reasoning_tokens: 0,
+            generated_text: String::new(),
+            error: Some(error),
+        };
 
         let mut request = self.client.post(&url).json(&payload);
         if let Some(ref key) = self.api_key {
@@ -120,56 +143,28 @@ impl BenchmarkClient {
         let response = match tokio::time::timeout(self.timeout, request.send()).await {
             Ok(Ok(resp)) => resp,
             Ok(Err(e)) => {
-                return RawRequestResult {
-                    request_id,
-                    start_time_ns: 0,
-                    first_token_time_ns: 0,
-                    end_time_ns: 0,
-                    num_input_tokens: 0,
-                    num_output_tokens: 0,
-                    reasoning_tokens: 0,
-                    error: Some(RequestError {
-                        code: 0,
-                        message: format!("Connection error: {}", e),
-                    }),
-                };
+                return error_result(RequestError {
+                    code: 0,
+                    message: format!("Connection error: {}", e),
+                });
             }
             Err(_) => {
-                return RawRequestResult {
-                    request_id,
-                    start_time_ns: 0,
-                    first_token_time_ns: 0,
-                    end_time_ns: 0,
-                    num_input_tokens: 0,
-                    num_output_tokens: 0,
-                    reasoning_tokens: 0,
-                    error: Some(RequestError {
-                        code: 0,
-                        message: "Request timeout".to_string(),
-                    }),
-                };
+                return error_result(RequestError {
+                    code: 0,
+                    message: "Request timeout".to_string(),
+                });
             }
         };
 
         if !response.status().is_success() {
             let code = response.status().as_u16();
             let body = response.text().await.unwrap_or_default();
-            return RawRequestResult {
-                request_id,
-                start_time_ns: 0,
-                first_token_time_ns: 0,
-                end_time_ns: 0,
-                num_input_tokens: 0,
-                num_output_tokens: 0,
-                reasoning_tokens: 0,
-                error: Some(RequestError {
-                    code,
-                    message: body,
-                }),
-            };
+            return error_result(RequestError {
+                code,
+                message: body,
+            });
         }
 
-        let absolute_start = start;
         let mut first_token_time_ns: Option<u64> = None;
         let mut generated_text = String::new();
         let mut usage: Option<Usage> = None;
@@ -183,19 +178,10 @@ impl BenchmarkClient {
             let chunk = match chunk_result {
                 Ok(c) => c,
                 Err(e) => {
-                    return RawRequestResult {
-                        request_id,
-                        start_time_ns: 0,
-                        first_token_time_ns: 0,
-                        end_time_ns: 0,
-                        num_input_tokens: 0,
-                        num_output_tokens: 0,
-                        reasoning_tokens: 0,
-                        error: Some(RequestError {
-                            code: 0,
-                            message: format!("Stream error: {}", e),
-                        }),
-                    };
+                    return error_result(RequestError {
+                        code: 0,
+                        message: format!("Stream error: {}", e),
+                    });
                 }
             };
 
@@ -208,26 +194,35 @@ impl BenchmarkClient {
 
                 if let Some(sse) = parse_sse_chunk(&line) {
                     if sse.done {
-                        let end_ns = absolute_start.elapsed().as_nanos() as u64;
+                        let end_ns = start.elapsed().as_nanos() as u64;
                         let u = usage.unwrap_or(Usage {
                             prompt_tokens: 0,
                             completion_tokens: 0,
+                            completion_tokens_details: None,
                         });
+                        let reasoning = u
+                            .completion_tokens_details
+                            .as_ref()
+                            .and_then(|d| d.reasoning_tokens)
+                            .unwrap_or(0);
                         return RawRequestResult {
                             request_id,
                             start_time_ns: 0,
                             first_token_time_ns: first_token_time_ns.unwrap_or(0),
                             end_time_ns: end_ns,
+                            run_offset_ns,
                             num_input_tokens: u.prompt_tokens,
                             num_output_tokens: u.completion_tokens,
-                            reasoning_tokens: 0,
+                            reasoning_tokens: reasoning,
+                            generated_text,
                             error: None,
                         };
                     }
 
                     if let Some(ref content) = sse.content {
                         if first_token_time_ns.is_none() {
-                            first_token_time_ns = Some(absolute_start.elapsed().as_nanos() as u64);
+                            // Capture BEFORE processing content
+                            first_token_time_ns = Some(start.elapsed().as_nanos() as u64);
                         }
                         generated_text.push_str(content);
                     }
@@ -240,19 +235,27 @@ impl BenchmarkClient {
         }
 
         // Stream ended without [DONE]
-        let end_ns = absolute_start.elapsed().as_nanos() as u64;
+        let end_ns = start.elapsed().as_nanos() as u64;
         let u = usage.unwrap_or(Usage {
             prompt_tokens: 0,
             completion_tokens: 0,
+            completion_tokens_details: None,
         });
+        let reasoning = u
+            .completion_tokens_details
+            .as_ref()
+            .and_then(|d| d.reasoning_tokens)
+            .unwrap_or(0);
         RawRequestResult {
             request_id,
             start_time_ns: 0,
             first_token_time_ns: first_token_time_ns.unwrap_or(0),
             end_time_ns: end_ns,
+            run_offset_ns,
             num_input_tokens: u.prompt_tokens,
             num_output_tokens: u.completion_tokens,
-            reasoning_tokens: 0,
+            reasoning_tokens: reasoning,
+            generated_text,
             error: None,
         }
     }

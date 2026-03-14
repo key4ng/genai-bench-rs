@@ -18,7 +18,8 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use client::BenchmarkClient;
 use output::{
-    print_error_summary, print_summary_table, write_detailed_stats_csv, write_summary_csv,
+    print_error_summary, print_summary_table, write_detailed_stats_csv, write_raw_json,
+    write_summary_csv,
 };
 use plot::{generate_plots, PlotConfig, PlotType};
 use runner::{run_benchmark, RunConfig};
@@ -89,6 +90,9 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
 
         let mut all_aggregated: Vec<metrics::AggregatedMetrics> = Vec::new();
         let mut all_errors: Vec<(u32, HashMap<String, usize>)> = Vec::new();
+        let mut all_raw_results: Vec<(u32, Vec<metrics::RawRequestResult>)> = Vec::new();
+        let mut total_mismatch_count: usize = 0;
+        let mut total_request_count: usize = 0;
 
         for &concurrency in &args.concurrency {
             if cancelled.load(Ordering::Relaxed) {
@@ -110,8 +114,25 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
             )
             .await;
 
+            // Token count cross-validation
+            for raw in &result.all_requests {
+                if raw.error.is_none() && !raw.generated_text.is_empty() {
+                    total_request_count += 1;
+                    if let Ok(local_count) = prompt_generator.count_tokens(&raw.generated_text) {
+                        let server_count = raw.num_output_tokens as usize;
+                        if server_count > 0 {
+                            let diff = (local_count as f64 - server_count as f64).abs();
+                            if diff / server_count as f64 > 0.1 {
+                                total_mismatch_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+
             all_aggregated.push(result.aggregated.clone());
             all_errors.push((concurrency, result.error_breakdown.clone()));
+            all_raw_results.push((concurrency, result.all_requests));
 
             // Print running summary table
             print_summary_table(&all_aggregated);
@@ -129,8 +150,47 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
         write_summary_csv(&scenario_dir.join("summary.csv"), &all_aggregated)?;
         write_detailed_stats_csv(&scenario_dir.join("detailed_stats.csv"), &all_aggregated)?;
 
+        // Write raw_results.json
+        let metadata = serde_json::json!({
+            "api_base": &args.api_base,
+            "model": &args.model,
+            "scenario": scenario.name(),
+            "duration": format!("{}s", args.duration.as_secs()),
+        });
+        let raw_json_data: Vec<(u32, &[metrics::RawRequestResult], f64, f64, usize, usize)> =
+            all_raw_results
+                .iter()
+                .zip(all_aggregated.iter())
+                .map(|((conc, reqs), agg)| {
+                    (
+                        *conc,
+                        reqs.as_slice(),
+                        agg.run_duration_s,
+                        agg.output_throughput_server_tps,
+                        agg.total_requests,
+                        agg.error_count,
+                    )
+                })
+                .collect();
+        write_raw_json(
+            &scenario_dir.join("raw_results.json"),
+            &metadata,
+            &raw_json_data,
+        )?;
+
         // Print error summary
         print_error_summary(&all_errors);
+
+        // Token mismatch warning (once at end, not per-request)
+        if total_mismatch_count > 0 {
+            eprintln!(
+                "[WARN] Token count mismatches: {}/{} requests ({:.1}%) had >10% discrepancy between \
+                 server and client token counts. Server counts used for all metrics.",
+                total_mismatch_count,
+                total_request_count,
+                total_mismatch_count as f64 / total_request_count as f64 * 100.0
+            );
+        }
 
         eprintln!("\nResults saved to {}", scenario_dir.display());
     }

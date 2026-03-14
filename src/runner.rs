@@ -39,7 +39,7 @@ pub async fn run_benchmark(
     let request_counter = Arc::new(AtomicU64::new(0));
     let completed_counter = Arc::new(AtomicU64::new(0));
 
-    let start_time = Instant::now();
+    let run_start = Instant::now();
     let duration = config.duration;
     let max_requests = config.max_requests;
 
@@ -61,14 +61,17 @@ pub async fn run_benchmark(
     let producer_counter = request_counter.clone();
     let producer_completed = completed_counter.clone();
     let producer_cancelled = cancelled.clone();
-    let (input_tokens, output_tokens) = scenario.sample();
+    // For D(N,M) scenario.sample() always returns the same values,
+    // but we call it per-request to support future distribution scenarios.
+    let scenario_input = scenario.sample().0;
+    let scenario_output = scenario.sample().1;
 
     let producer = tokio::spawn(async move {
         loop {
             if producer_cancelled.load(Ordering::Relaxed) {
                 break;
             }
-            if start_time.elapsed() >= duration {
+            if run_start.elapsed() >= duration {
                 break;
             }
             if let Some(max) = max_requests {
@@ -87,6 +90,8 @@ pub async fn run_benchmark(
             let pg = producer_pg.clone();
             let tx = producer_tx.clone();
             let completed = producer_completed.clone();
+            let input_tokens = scenario_input;
+            let output_tokens = scenario_output;
 
             tokio::spawn(async move {
                 let prompt = pg
@@ -94,11 +99,24 @@ pub async fn run_benchmark(
                     .unwrap_or_else(|_| "Hello".to_string());
 
                 let result = client
-                    .send_request(request_id, &prompt, output_tokens)
+                    .send_request(request_id, &prompt, output_tokens, run_start)
                     .await;
 
                 if result.error.is_none() {
                     completed.fetch_add(1, Ordering::Relaxed);
+                } else if let Some(ref err) = result.error {
+                    // Real-time per-request error warning
+                    let msg = if err.code > 0 {
+                        format!(
+                            "[WARN] Request {}: HTTP {} {}",
+                            request_id,
+                            err.code,
+                            err.message.lines().next().unwrap_or("")
+                        )
+                    } else {
+                        format!("[WARN] Request {}: {}", request_id, err.message)
+                    };
+                    eprintln!("{}", msg);
                 }
 
                 let _ = tx.send(result).await;
@@ -120,10 +138,10 @@ pub async fn run_benchmark(
     producer.await.ok();
     pb.finish_and_clear();
 
-    let total_elapsed = start_time.elapsed().as_secs_f64();
+    let total_elapsed_ns = run_start.elapsed().as_nanos() as u64;
 
     // Separate successes and errors
-    let mut successes: Vec<RequestMetrics> = Vec::new();
+    let mut successes: Vec<(RequestMetrics, u64)> = Vec::new(); // (metrics, run_offset_ns)
     let mut error_breakdown: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
@@ -136,17 +154,33 @@ pub async fn run_benchmark(
             };
             *error_breakdown.entry(key).or_default() += 1;
         } else if let Some(metrics) = compute_request_metrics(raw) {
-            successes.push(metrics);
+            successes.push((metrics, raw.run_offset_ns));
         }
     }
 
-    // Filter warmup and cooldown
-    // Note: For proper filtering we'd need per-request start times relative to run start.
-    // Currently all requests are included. This will be refined when absolute start times
-    // are stored in RawRequestResult.
-    let filtered: Vec<RequestMetrics> = successes;
+    // Filter warmup and cooldown based on request start_time relative to run start
+    let warmup_ns = (WARMUP_SECS * 1_000_000_000.0) as u64;
+    let cooldown_threshold_ns =
+        total_elapsed_ns.saturating_sub((COOLDOWN_SECS * 1_000_000_000.0) as u64);
 
-    let run_duration = total_elapsed;
+    let filtered: Vec<RequestMetrics> = successes
+        .into_iter()
+        .filter(|(_, run_offset_ns)| {
+            *run_offset_ns >= warmup_ns && *run_offset_ns <= cooldown_threshold_ns
+        })
+        .map(|(m, _)| m)
+        .collect();
+
+    // Compute run_duration as the filtered window
+    let run_duration = if filtered.is_empty() {
+        run_start.elapsed().as_secs_f64()
+    } else {
+        // Find the window from first included request start to last included request end
+        // For now, use total elapsed minus warmup/cooldown
+        let effective_duration = run_start.elapsed().as_secs_f64() - WARMUP_SECS - COOLDOWN_SECS;
+        effective_duration.max(0.1) // avoid division by zero
+    };
+
     let error_count = error_breakdown.values().sum::<usize>();
 
     let mut aggregated = if filtered.is_empty() {

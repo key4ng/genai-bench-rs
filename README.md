@@ -306,7 +306,7 @@ Benchmark of **DeepSeek-R1-Distill-Qwen-32B** on 4x NVIDIA A100 GPUs, scenario D
 | 2048        | 21.741   | 0.1882   | 33.308  | 13.8   | 5700.4  | 57.00 |
 | 4096        | 48.233   | 0.0925   | 54.441  | 13.6   | 4261.0  | 42.61 |
 
-### gRPC (SGLang)
+### gRPC + SMG Router (SGLang)
 
 | Concurrency | TTFT p99 | TPOT p99 | E2E p99 | OT/req | OT/srv  | RPS   |
 |-------------|----------|----------|---------|--------|---------|-------|

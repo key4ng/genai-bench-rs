@@ -103,6 +103,8 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
             let config = RunConfig {
                 duration: args.duration,
                 concurrency,
+                warmup_ratio: args.warmup_ratio,
+                cooldown_ratio: args.cooldown_ratio,
             };
 
             let result = run_benchmark(

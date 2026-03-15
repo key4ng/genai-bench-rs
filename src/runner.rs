@@ -12,12 +12,11 @@ use crate::metrics::{
 use crate::scenario::Scenario;
 use crate::tokenizer::PromptGenerator;
 
-const WARMUP_SECS: f64 = 5.0;
-const COOLDOWN_SECS: f64 = 5.0;
-
 pub struct RunConfig {
     pub duration: Duration,
     pub concurrency: u32,
+    pub warmup_ratio: f64,
+    pub cooldown_ratio: f64,
 }
 
 pub struct RunResult {
@@ -150,10 +149,8 @@ pub async fn run_benchmark(
         );
     }
 
-    let total_elapsed_ns = run_start.elapsed().as_nanos() as u64;
-
-    // Separate successes and errors
-    let mut successes: Vec<(RequestMetrics, u64, u64)> = Vec::new(); // (metrics, start_ns, end_ns)
+    // Separate successes and errors, preserving completion order
+    let mut successes: Vec<RequestMetrics> = Vec::new();
     let mut error_breakdown: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
@@ -166,59 +163,36 @@ pub async fn run_benchmark(
             };
             *error_breakdown.entry(key).or_default() += 1;
         } else if let Some(metrics) = compute_request_metrics(raw) {
-            successes.push((metrics, raw.start_ns, raw.end_ns));
+            successes.push(metrics);
         }
     }
 
-    // Filter warmup and cooldown based on request start_time relative to run start.
-    // Skip filtering if the run is too short (< warmup + cooldown + 1s of useful data).
-    let warmup_ns = (WARMUP_SECS * 1_000_000_000.0) as u64;
-    let cooldown_ns = (COOLDOWN_SECS * 1_000_000_000.0) as u64;
-    let min_run_for_filtering = warmup_ns + cooldown_ns + 1_000_000_000; // at least 1s of data
+    // Filter warmup and cooldown by request count ratio (like genai-bench).
+    // Skip first N% and last N% of successful requests by completion order.
+    let total_success = successes.len();
+    let warmup_count = (total_success as f64 * config.warmup_ratio) as usize;
+    let cooldown_count = (total_success as f64 * config.cooldown_ratio) as usize;
+    let end_idx = total_success.saturating_sub(cooldown_count);
 
-    let filtered_with_times: Vec<(RequestMetrics, u64, u64)> =
-        if total_elapsed_ns > min_run_for_filtering {
-            let cooldown_threshold_ns = total_elapsed_ns.saturating_sub(cooldown_ns);
-            successes
-                .into_iter()
-                .filter(|(_, s_ns, _)| *s_ns >= warmup_ns && *s_ns <= cooldown_threshold_ns)
-                .collect()
-        } else {
-            // Run too short for warmup/cooldown — include all requests
-            successes
-        };
-
-    // Compute run_duration from the filtered window:
-    // from first included request's start to last included request's end
-    let run_duration = if filtered_with_times.is_empty() {
-        run_start.elapsed().as_secs_f64()
+    let filtered: Vec<RequestMetrics> = if warmup_count + cooldown_count < total_success {
+        successes.drain(warmup_count..end_idx).collect()
     } else {
-        let first_start = filtered_with_times
-            .iter()
-            .map(|(_, s, _)| *s)
-            .min()
-            .unwrap();
-        let last_end = filtered_with_times
-            .iter()
-            .map(|(_, _, e)| *e)
-            .max()
-            .unwrap();
-        ((last_end - first_start) as f64 / 1_000_000_000.0).max(0.001)
+        successes
     };
 
-    let filtered: Vec<RequestMetrics> =
-        filtered_with_times.into_iter().map(|(m, _, _)| m).collect();
-
-    let total_before_filter = all_results.len();
-    if filtered.len() < total_before_filter / 2 && total_before_filter > 10 {
+    if warmup_count + cooldown_count > 0 && !filtered.is_empty() {
         eprintln!(
-            "[WARN] Warmup/cooldown filtered {}/{} requests ({:.0}% excluded). \
-             Consider increasing --duration for high concurrency levels.",
-            total_before_filter - filtered.len(),
-            total_before_filter,
-            (total_before_filter - filtered.len()) as f64 / total_before_filter as f64 * 100.0
+            "Filtered {}/{} requests (warmup: {}, cooldown: {})",
+            filtered.len(),
+            total_success,
+            warmup_count,
+            cooldown_count
         );
     }
+
+    // Compute run_duration from the total elapsed time minus warmup/cooldown proportion
+    let run_duration = run_start.elapsed().as_secs_f64()
+        * (1.0 - config.warmup_ratio - config.cooldown_ratio).max(0.1);
 
     let error_count = error_breakdown.values().sum::<usize>();
 

@@ -50,6 +50,14 @@ pub struct BenchmarkArgs {
     #[arg(long, default_value = "5m", value_parser = parse_duration)]
     pub duration: Duration,
 
+    /// Ratio of initial requests to exclude as warmup (0.0-1.0)
+    #[arg(long, default_value_t = 0.0)]
+    pub warmup_ratio: f64,
+
+    /// Ratio of final requests to exclude as cooldown (0.0-1.0)
+    #[arg(long, default_value_t = 0.0)]
+    pub cooldown_ratio: f64,
+
     /// Disable ignore_eos (for backends like OpenAI that don't support it)
     #[arg(long, default_value_t = false)]
     pub no_ignore_eos: bool,
@@ -113,9 +121,13 @@ impl BenchmarkArgs {
 
     pub fn validate(&self) -> Result<(), String> {
         if self.duration < Duration::from_secs(60) {
-            return Err("duration must be at least 1m \
-                 (warmup/cooldown filtering requires sufficient data)"
-                .to_string());
+            return Err("duration must be at least 1m for reliable metrics".to_string());
+        }
+        if self.warmup_ratio + self.cooldown_ratio >= 1.0 {
+            return Err(format!(
+                "warmup_ratio ({}) + cooldown_ratio ({}) must be less than 1.0",
+                self.warmup_ratio, self.cooldown_ratio
+            ));
         }
         Ok(())
     }

@@ -63,6 +63,7 @@ pub async fn run_benchmark(
     let producer_completed = completed_counter.clone();
     let producer_cancelled = cancelled.clone();
     let producer_errors = error_counter.clone();
+    let producer_pb = pb.clone();
     // For D(N,M) scenario.sample() always returns the same values,
     // but we call it per-request to support future distribution scenarios.
     let scenario_input = scenario.sample().0;
@@ -88,6 +89,7 @@ pub async fn run_benchmark(
             let tx = producer_tx.clone();
             let completed = producer_completed.clone();
             let errors = producer_errors.clone();
+            let pb_clone = producer_pb.clone();
             let input_tokens = scenario_input;
             let output_tokens = scenario_output;
 
@@ -115,7 +117,7 @@ pub async fn run_benchmark(
                         } else {
                             format!("[WARN] Request {}: {}", request_id, err.message)
                         };
-                        eprintln!("{}", msg);
+                        pb_clone.println(msg);
                     }
                 }
 

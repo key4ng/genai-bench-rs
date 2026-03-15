@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use comfy_table::{Cell, Table};
+use comfy_table::{Cell, Color, Table};
 
 use crate::metrics::{AggregatedMetrics, RawRequestResult};
 
@@ -185,19 +185,24 @@ pub fn print_summary_table(results: &[AggregatedMetrics]) {
     ]);
 
     for agg in results {
+        let error_cell = if agg.error_count > 0 {
+            Cell::new(agg.error_count).fg(Color::Red)
+        } else {
+            Cell::new(agg.error_count).fg(Color::Green)
+        };
         table.add_row(vec![
-            Cell::new(agg.concurrency),
+            Cell::new(agg.concurrency).fg(Color::Cyan),
             Cell::new(format!("{:.3}", agg.stats.ttft.p99)),
             Cell::new(format!("{:.4}", agg.stats.tpot.p99)),
             Cell::new(format!("{:.3}", agg.stats.e2e_latency.p99)),
-            Cell::new(format!("{:.1}", agg.stats.output_throughput.mean)),
-            Cell::new(format!("{:.1}", agg.output_throughput_server_tps)),
-            Cell::new(format!("{:.2}", agg.rps)),
-            Cell::new(agg.error_count),
+            Cell::new(format!("{:.1}", agg.stats.output_throughput.mean)).fg(Color::Yellow),
+            Cell::new(format!("{:.1}", agg.output_throughput_server_tps)).fg(Color::Yellow),
+            Cell::new(format!("{:.2}", agg.rps)).fg(Color::Yellow),
+            error_cell,
         ]);
     }
 
-    let output = format!("\nCompleted runs:\n{table}");
+    let output = format!("\n\x1b[1mCompleted runs:\x1b[0m\n{table}");
     let line_count = output.lines().count();
 
     // Move cursor up to overwrite previous table

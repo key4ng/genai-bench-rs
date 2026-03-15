@@ -69,6 +69,21 @@ async fn run_benchmark_command(args: cli::BenchmarkArgs) -> Result<()> {
         max_concurrency,
     )?);
 
+    // Probe endpoint with a single streaming request
+    eprintln!("Verifying endpoint...");
+    let probe_prompt = prompt_generator.generate_prompt(10)?;
+    let probe_result = client
+        .send_request(0, &probe_prompt, 1, std::time::Instant::now())
+        .await;
+    if let Some(ref err) = probe_result.error {
+        return Err(anyhow::anyhow!(
+            "Endpoint check failed: {} (code {})\nCheck --api-base and ensure the server is running.",
+            err.message.lines().next().unwrap_or(&err.message),
+            err.code
+        ));
+    }
+    eprintln!("Endpoint OK");
+
     // Set up Ctrl+C handler
     let cancelled = Arc::new(AtomicBool::new(false));
     let cancelled_clone = cancelled.clone();

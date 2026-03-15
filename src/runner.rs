@@ -129,12 +129,33 @@ pub async fn run_benchmark(
     // Drop the producer's tx clone so rx completes when producer is done
     drop(tx);
 
-    // Collect results
+    // Collect results, abort early if all requests are failing
     let mut all_results: Vec<RawRequestResult> = Vec::new();
+    let mut consecutive_errors: u64 = 0;
+    const EARLY_ABORT_THRESHOLD: u64 = 50;
+
     while let Some(result) = rx.recv().await {
+        if result.error.is_some() {
+            consecutive_errors += 1;
+        } else {
+            consecutive_errors = 0;
+        }
         all_results.push(result);
         pb.set_position(run_start.elapsed().as_secs());
         pb.set_prefix(format!("{}", completed_counter.load(Ordering::Relaxed)));
+
+        // Abort if first N requests all fail (likely wrong endpoint)
+        if consecutive_errors >= EARLY_ABORT_THRESHOLD
+            && completed_counter.load(Ordering::Relaxed) == 0
+        {
+            eprintln!(
+                "\n[ERROR] {} consecutive errors with 0 successful requests. \
+                 Check --api-base and ensure the server is running.",
+                consecutive_errors
+            );
+            cancelled.store(true, Ordering::Relaxed);
+            break;
+        }
     }
 
     producer.await.ok();

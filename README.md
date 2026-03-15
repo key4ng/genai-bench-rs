@@ -381,13 +381,13 @@ gbrs benchmark --api-base http://server2:8000/v1 --model model-B \
 
 ```bash
 # Increase file descriptor limit first
-ulimit -n 4096
+ulimit -n 65536
 
 gbrs benchmark \
     --api-base http://localhost:8000/v1 \
     --model meta-llama/Llama-3-8B \
     --scenario D(100,100) \
-    --concurrency 1,64,128,256,512,1024 \
+    --concurrency 64,128,256,512,1024,2048,4096 \
     --duration 5m \
     --timeout 120s
 ```

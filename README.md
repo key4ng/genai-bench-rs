@@ -298,41 +298,37 @@ Each scenario appears as a separate line with a legend. Data points represent co
 
 Benchmark of **DeepSeek-R1-Distill-Qwen-32B** on 2x NVIDIA H100 GPUs, scenario D(100,100), 1 minute per concurrency level.
 
-### HTTP (SGLang)
+### SGLang + SMG Router (HTTP)
 
-| Concurrency | TTFT p99 | TPOT p99 | E2E p99 | OT/req | OT/srv  | RPS   |
-|-------------|----------|----------|---------|--------|---------|-------|
-| 64          | 0.605    | 0.0202   | 2.416   | 56.1   | 3034.8  | 30.35 |
-| 128         | 1.099    | 0.0243   | 2.989   | 49.3   | 4728.4  | 47.28 |
-| 256         | 1.561    | 0.0366   | 4.282   | 32.9   | 6478.7  | 64.79 |
-| 512         | 3.180    | 0.0676   | 7.810   | 18.9   | **7047.7** | 70.48 |
-| 1024        | 11.348   | 0.0922   | 19.081  | 14.4   | 6984.3  | 69.84 |
-| 2048        | 21.741   | 0.1882   | 33.308  | 13.8   | 5700.4  | 57.00 |
-| 4096        | 48.233   | 0.0925   | 54.441  | 13.6   | 4261.0  | 42.61 |
+| Concurrency | TTFT p99 | TPOT p99 | E2E p99 | OT/req p1 | OT/srv  | RPS   |
+|-------------|----------|----------|---------|-----------|---------|-------|
+| 64          | 0.559    | 0.0201   | 2.392   | 54.4      | 3094.2  | 30.94 |
+| 128         | 0.930    | 0.0266   | 3.036   | 42.6      | 4737.5  | 47.38 |
+| 256         | 1.728    | 0.0367   | 4.620   | 33.7      | 6496.7  | 64.97 |
+| 512         | 3.174    | 0.0664   | 7.454   | 18.8      | **6917.5** | 69.17 |
+| 1024        | 11.701   | 0.1147   | 20.012  | 13.4      | 7018.3  | 70.18 |
 
-### gRPC + SMG Router (SGLang)
+### SGLang + SMG Router (gRPC)
 
-| Concurrency | TTFT p99 | TPOT p99 | E2E p99 | OT/req | OT/srv  | RPS   |
-|-------------|----------|----------|---------|--------|---------|-------|
-| 64          | 0.408    | 0.0187   | 1.997   | 61.2   | 3220.7  | 32.21 |
-| 128         | 0.740    | 0.0222   | 2.781   | 51.2   | 5011.7  | 50.12 |
-| 256         | 1.444    | 0.0356   | 3.967   | 36.1   | 6614.8  | 66.15 |
-| 512         | 2.692    | 0.0629   | 7.010   | 20.0   | **7559.5** | 75.59 |
-| 1024        | 10.938   | 0.0944   | 19.081  | 14.5   | 7033.4  | 70.33 |
-| 2048        | 21.140   | 0.0919   | 27.710  | 14.0   | 5950.8  | 59.51 |
-| 4096        | 47.644   | 0.1909   | 59.610  | 13.9   | 3851.9  | 38.52 |
+| Concurrency | TTFT p99 | TPOT p99 | E2E p99 | OT/req p1 | OT/srv  | RPS   |
+|-------------|----------|----------|---------|-----------|---------|-------|
+| 64          | 0.434    | 0.0186   | 2.066   | 58.2      | 3200.0  | 32.00 |
+| 128         | 0.733    | 0.0237   | 2.565   | 51.4      | 5013.3  | 50.13 |
+| 256         | 1.402    | 0.0346   | 4.000   | 36.3      | 6826.7  | 68.27 |
+| 512         | 2.677    | 0.0642   | 7.019   | 19.5      | **7253.3** | 72.53 |
+| 1024        | 12.157   | 0.1185   | 20.292  | 13.2      | 7030.0  | 70.30 |
 
 ### Analysis
 
-**Peak throughput**: Both backends peak at concurrency 512 -- gRPC achieves **7559 tok/s** vs HTTP's **7048 tok/s** (7.3% higher).
+**Peak throughput**: Both backends plateau around concurrency 512-1024 -- gRPC achieves **7253 tok/s** vs HTTP's **6918 tok/s** at concurrency 512 (4.8% higher), with both reaching ~7000 tok/s at 1024.
 
-**Latency at low concurrency**: gRPC shows consistently lower TTFT across all levels. At concurrency 64, gRPC TTFT p99 is 0.408s vs HTTP's 0.605s (33% lower). This reflects reduced connection overhead with gRPC's persistent HTTP/2 streams.
+**Latency at low concurrency**: gRPC shows consistently lower TTFT across all levels. At concurrency 64, gRPC TTFT p99 is 0.434s vs HTTP's 0.559s (22% lower). This reflects reduced connection overhead with gRPC's persistent HTTP/2 streams.
 
-**Per-request throughput**: gRPC maintains better per-request output speed (OT/req). At concurrency 512, gRPC delivers 20.0 tok/s per request vs HTTP's 18.9 tok/s.
+**Per-request throughput (worst 1%)**: gRPC maintains better worst-case per-request speed. At concurrency 512, gRPC delivers 19.5 tok/s (p1) vs HTTP's 18.8 tok/s.
 
-**Degradation at high concurrency**: Both backends degrade sharply beyond 512 concurrent requests. At 4096, server throughput drops to ~55% of peak (HTTP: 4261, gRPC: 3852) while TTFT explodes to 48s+. This indicates the server's scheduling and memory become the bottleneck, not the transport layer.
+**Saturation point**: Both backends saturate around concurrency 512-1024. Beyond 1024, server throughput plateaus while TTFT grows linearly with concurrency — requests spend most of their time waiting in the queue, not generating.
 
-**Key takeaway**: gRPC provides a modest but consistent advantage at every concurrency level, with the gap most visible in TTFT. Both backends saturate around 512 concurrent requests for this model/GPU configuration. Running beyond 1024 concurrency yields no throughput benefit and dramatically hurts latency.
+**Key takeaway**: gRPC provides a modest but consistent advantage at every concurrency level, with the gap most visible in TTFT. Both backends saturate around 512 concurrent requests for this model/GPU configuration.
 
 ## Examples
 

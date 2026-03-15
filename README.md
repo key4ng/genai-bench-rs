@@ -292,7 +292,7 @@ Each scenario appears as a separate line with a legend. Data points represent co
 
 ## Sample Results
 
-Benchmark of **DeepSeek-R1-Distill-Qwen-32B** on 4x NVIDIA A100 GPUs, scenario D(100,100), 2 minutes per concurrency level.
+Benchmark of **DeepSeek-R1-Distill-Qwen-32B** on 2x NVIDIA H100 GPUs, scenario D(100,100), 1 minute per concurrency level.
 
 ### HTTP (vLLM)
 

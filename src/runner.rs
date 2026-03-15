@@ -150,7 +150,7 @@ pub async fn run_benchmark(
     }
 
     // Separate successes and errors, preserving completion order
-    let mut successes: Vec<RequestMetrics> = Vec::new();
+    let mut successes: Vec<(RequestMetrics, u64, u64)> = Vec::new(); // (metrics, start_ns, end_ns)
     let mut error_breakdown: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
@@ -163,7 +163,7 @@ pub async fn run_benchmark(
             };
             *error_breakdown.entry(key).or_default() += 1;
         } else if let Some(metrics) = compute_request_metrics(raw) {
-            successes.push(metrics);
+            successes.push((metrics, raw.start_ns, raw.end_ns));
         }
     }
 
@@ -174,25 +174,43 @@ pub async fn run_benchmark(
     let cooldown_count = (total_success as f64 * config.cooldown_ratio) as usize;
     let end_idx = total_success.saturating_sub(cooldown_count);
 
-    let filtered: Vec<RequestMetrics> = if warmup_count + cooldown_count < total_success {
-        successes.drain(warmup_count..end_idx).collect()
-    } else {
-        successes
-    };
+    let filtered_with_times: Vec<(RequestMetrics, u64, u64)> =
+        if warmup_count + cooldown_count < total_success {
+            successes.drain(warmup_count..end_idx).collect()
+        } else {
+            successes
+        };
 
-    if warmup_count + cooldown_count > 0 && !filtered.is_empty() {
+    if warmup_count + cooldown_count > 0 && !filtered_with_times.is_empty() {
         eprintln!(
             "Filtered {}/{} requests (warmup: {}, cooldown: {})",
-            filtered.len(),
+            filtered_with_times.len(),
             total_success,
             warmup_count,
             cooldown_count
         );
     }
 
-    // Compute run_duration from the total elapsed time minus warmup/cooldown proportion
-    let run_duration = run_start.elapsed().as_secs_f64()
-        * (1.0 - config.warmup_ratio - config.cooldown_ratio).max(0.1);
+    // Compute run_duration from the actual filtered window:
+    // first included request's start to last included request's end
+    let run_duration = if filtered_with_times.is_empty() {
+        run_start.elapsed().as_secs_f64()
+    } else {
+        let first_start = filtered_with_times
+            .iter()
+            .map(|(_, s, _)| *s)
+            .min()
+            .unwrap();
+        let last_end = filtered_with_times
+            .iter()
+            .map(|(_, _, e)| *e)
+            .max()
+            .unwrap();
+        ((last_end - first_start) as f64 / 1_000_000_000.0).max(0.001)
+    };
+
+    let filtered: Vec<RequestMetrics> =
+        filtered_with_times.into_iter().map(|(m, _, _)| m).collect();
 
     let error_count = error_breakdown.values().sum::<usize>();
 

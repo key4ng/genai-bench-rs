@@ -48,6 +48,7 @@ pub fn parse_sse_chunk(line: &str) -> Option<SseChunk> {
     let content = v["choices"]
         .get(0)
         .and_then(|c| c["delta"]["content"].as_str())
+        .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
     let usage = v.get("usage").and_then(|u| {

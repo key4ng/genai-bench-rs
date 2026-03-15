@@ -210,27 +210,12 @@ pub async fn run_benchmark(
         );
     }
 
-    // Compute run_duration from the steady-state window:
-    // first included request's start to last included request's start.
-    // Using start_ns (not end_ns) because all included requests completed
-    // within the active spawning window.
-    let run_duration = if filtered_with_times.is_empty() {
-        run_start.elapsed().as_secs_f64()
-    } else {
-        let first_start = filtered_with_times
-            .iter()
-            .map(|(_, s, _)| *s)
-            .min()
-            .unwrap();
-        let last_start = filtered_with_times
-            .iter()
-            .map(|(_, s, _)| *s)
-            .max()
-            .unwrap();
-        // Use last start + average E2E latency as a better estimate,
-        // but start-to-start is the clean steady-state window
-        ((last_start - first_start) as f64 / 1_000_000_000.0).max(0.001)
-    };
+    // run_duration = configured duration (the active spawning window).
+    // Only completed requests within this window are counted, so server
+    // throughput may be slightly conservative at high concurrency where
+    // many requests are still in-flight at cutoff. Increase --duration
+    // for more accurate results.
+    let run_duration = config.duration.as_secs_f64();
 
     let filtered: Vec<RequestMetrics> =
         filtered_with_times.into_iter().map(|(m, _, _)| m).collect();

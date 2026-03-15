@@ -161,7 +161,7 @@ Per-request metrics are aggregated with full percentile distributions: min, p1, 
 
 **Drain filtering**: Requests that complete after the spawn window (i.e., `--duration` expires) are automatically excluded. At high concurrency, the server continues processing in-flight requests after spawning stops, but these run under decreasing concurrency — not true steady-state. Only requests that both started and completed within the active spawning window are included in metrics.
 
-**Server-level `run_duration`**: Computed from the first included request's start to the last included request's start — the window where target concurrency was maintained.
+**Server-level `run_duration`**: Uses the configured `--duration` as the measurement window. Only tokens from requests that completed within this window are counted, so server throughput may be slightly conservative at very high concurrency where many requests are still in-flight at cutoff. Increase `--duration` for more accurate results at extreme concurrency levels.
 
 ### Percentile Convention
 

@@ -157,7 +157,11 @@ The `ignore_eos` flag (sent by default) forces vLLM/SGLang to generate exactly `
 
 Per-request metrics are aggregated with full percentile distributions: min, p1, p5, p10, p25, p50, p75, p90, p95, p99, max, mean, stddev.
 
-**Warmup/cooldown**: The first 5 seconds and last 5 seconds of each concurrency level are excluded from all metrics. Filtering is based on when each request was initiated, not when it completed. Server-level `run_duration` is computed from the filtered window (first included request start to last included request end).
+**Warmup/cooldown**: Optional ratio-based filtering via `--warmup-ratio` and `--cooldown-ratio` (default: 0, no filtering). For example, `--warmup-ratio 0.1 --cooldown-ratio 0.1` excludes the first 10% and last 10% of requests by completion order.
+
+**Drain filtering**: Requests that complete after the spawn window (i.e., `--duration` expires) are automatically excluded. At high concurrency, the server continues processing in-flight requests after spawning stops, but these run under decreasing concurrency — not true steady-state. Only requests that both started and completed within the active spawning window are included in metrics.
+
+**Server-level `run_duration`**: Computed from the first included request's start to the last included request's start — the window where target concurrency was maintained.
 
 ### Percentile Convention
 

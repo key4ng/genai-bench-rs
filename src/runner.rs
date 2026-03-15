@@ -167,32 +167,53 @@ pub async fn run_benchmark(
         }
     }
 
-    // Filter warmup and cooldown by request count ratio (like genai-bench).
+    // Step 1: Ratio-based warmup/cooldown filter.
     // Skip first N% and last N% of successful requests by completion order.
     let total_success = successes.len();
     let warmup_count = (total_success as f64 * config.warmup_ratio) as usize;
     let cooldown_count = (total_success as f64 * config.cooldown_ratio) as usize;
     let end_idx = total_success.saturating_sub(cooldown_count);
 
-    let filtered_with_times: Vec<(RequestMetrics, u64, u64)> =
+    let after_ratio_filter: Vec<(RequestMetrics, u64, u64)> =
         if warmup_count + cooldown_count < total_success {
             successes.drain(warmup_count..end_idx).collect()
         } else {
             successes
         };
 
-    if warmup_count + cooldown_count > 0 && !filtered_with_times.is_empty() {
+    // Step 2: Drain filter — exclude requests that completed after spawning stopped.
+    // These ran partially under decreasing concurrency, not true steady-state.
+    let duration_ns = config.duration.as_nanos() as u64;
+    let before_drain = after_ratio_filter.len();
+    let filtered_with_times: Vec<(RequestMetrics, u64, u64)> = after_ratio_filter
+        .into_iter()
+        .filter(|(_, _, e_ns)| *e_ns <= duration_ns)
+        .collect();
+    let drain_excluded = before_drain - filtered_with_times.len();
+
+    if warmup_count + cooldown_count + drain_excluded > 0 && !filtered_with_times.is_empty() {
+        let mut parts = Vec::new();
+        if warmup_count > 0 {
+            parts.push(format!("warmup: {}", warmup_count));
+        }
+        if cooldown_count > 0 {
+            parts.push(format!("cooldown: {}", cooldown_count));
+        }
+        if drain_excluded > 0 {
+            parts.push(format!("drain: {}", drain_excluded));
+        }
         eprintln!(
-            "Filtered {}/{} requests (warmup: {}, cooldown: {})",
+            "Filtered {}/{} requests ({})",
             filtered_with_times.len(),
             total_success,
-            warmup_count,
-            cooldown_count
+            parts.join(", ")
         );
     }
 
-    // Compute run_duration from the actual filtered window:
-    // first included request's start to last included request's end
+    // Compute run_duration from the steady-state window:
+    // first included request's start to last included request's start.
+    // Using start_ns (not end_ns) because all included requests completed
+    // within the active spawning window.
     let run_duration = if filtered_with_times.is_empty() {
         run_start.elapsed().as_secs_f64()
     } else {
@@ -201,12 +222,14 @@ pub async fn run_benchmark(
             .map(|(_, s, _)| *s)
             .min()
             .unwrap();
-        let last_end = filtered_with_times
+        let last_start = filtered_with_times
             .iter()
-            .map(|(_, _, e)| *e)
+            .map(|(_, s, _)| *s)
             .max()
             .unwrap();
-        ((last_end - first_start) as f64 / 1_000_000_000.0).max(0.001)
+        // Use last start + average E2E latency as a better estimate,
+        // but start-to-start is the clean steady-state window
+        ((last_start - first_start) as f64 / 1_000_000_000.0).max(0.001)
     };
 
     let filtered: Vec<RequestMetrics> =

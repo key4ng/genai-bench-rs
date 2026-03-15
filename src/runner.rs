@@ -36,6 +36,7 @@ pub async fn run_benchmark(
     let semaphore = Arc::new(Semaphore::new(config.concurrency as usize));
     let request_counter = Arc::new(AtomicU64::new(0));
     let completed_counter = Arc::new(AtomicU64::new(0));
+    let inflight_counter = Arc::new(AtomicU64::new(0));
 
     let run_start = Instant::now();
     let duration = config.duration;
@@ -44,7 +45,7 @@ pub async fn run_benchmark(
     let pb = ProgressBar::new(duration.as_secs());
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{msg} [{bar:40}] {pos}/{len}s {prefix} reqs [{eta} left]")
+            .template("{msg} [{bar:40}] {pos}/{len}s | {prefix} [{eta} left]")
             .unwrap()
             .progress_chars("█░"),
     );
@@ -60,6 +61,7 @@ pub async fn run_benchmark(
     let producer_tx = tx.clone();
     let producer_counter = request_counter.clone();
     let producer_completed = completed_counter.clone();
+    let producer_inflight = inflight_counter.clone();
     let producer_cancelled = cancelled.clone();
     let producer_errors = error_counter.clone();
     let producer_pb = pb.clone();
@@ -87,12 +89,15 @@ pub async fn run_benchmark(
             let pg = producer_pg.clone();
             let tx = producer_tx.clone();
             let completed = producer_completed.clone();
+            let inflight = producer_inflight.clone();
             let errors = producer_errors.clone();
             let pb_clone = producer_pb.clone();
             let input_tokens = scenario_input;
             let output_tokens = scenario_output;
 
             tokio::spawn(async move {
+                inflight.fetch_add(1, Ordering::Relaxed);
+
                 let prompt = pg
                     .generate_prompt(input_tokens)
                     .unwrap_or_else(|_| "Hello".to_string());
@@ -100,6 +105,8 @@ pub async fn run_benchmark(
                 let result = client
                     .send_request(request_id, &prompt, output_tokens, run_start)
                     .await;
+
+                inflight.fetch_sub(1, Ordering::Relaxed);
 
                 if result.error.is_none() {
                     completed.fetch_add(1, Ordering::Relaxed);
@@ -142,7 +149,11 @@ pub async fn run_benchmark(
         }
         all_results.push(result);
         pb.set_position(run_start.elapsed().as_secs());
-        pb.set_prefix(format!("{}", completed_counter.load(Ordering::Relaxed)));
+        pb.set_prefix(format!(
+            "{} done, {} inflight",
+            completed_counter.load(Ordering::Relaxed),
+            inflight_counter.load(Ordering::Relaxed)
+        ));
 
         // Abort if first N requests all fail (likely wrong endpoint)
         if consecutive_errors >= EARLY_ABORT_THRESHOLD

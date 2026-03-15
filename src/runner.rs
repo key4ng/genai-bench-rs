@@ -209,6 +209,17 @@ pub async fn run_benchmark(
     let filtered: Vec<RequestMetrics> =
         filtered_with_times.into_iter().map(|(m, _, _)| m).collect();
 
+    let total_before_filter = all_results.len();
+    if filtered.len() < total_before_filter / 2 && total_before_filter > 10 {
+        eprintln!(
+            "[WARN] Warmup/cooldown filtered {}/{} requests ({:.0}% excluded). \
+             Consider increasing --duration for high concurrency levels.",
+            total_before_filter - filtered.len(),
+            total_before_filter,
+            (total_before_filter - filtered.len()) as f64 / total_before_filter as f64 * 100.0
+        );
+    }
+
     let error_count = error_breakdown.values().sum::<usize>();
 
     let mut aggregated = if filtered.is_empty() {
